@@ -21,23 +21,47 @@ if 'user_db' not in st.session_state: st.session_state['user_db'] = {"admin": "p
 if 'health_data' not in st.session_state: st.session_state['health_data'] = []
 
 # --- Logic Functions ---
-def calculate_metrics(w, h, a, g, activity):
-    # Basal Metabolic Rate (Mifflin-St Jeor)
-    if g == "Male": bmr = 10 * w + 6.25 * (h*100) - 5 * a + 5
-    else: bmr = 10 * w + 6.25 * (h*100) - 5 * a - 161
+def calculate_macros(tdee, goal, weight):
+    # Adjust calories based on goal
+    if goal == "Lose Weight": 
+        target_cal = tdee - 500
+        p_ratio, f_ratio, c_ratio = 0.30, 0.25, 0.45 # Higher protein for satiety
+    elif goal == "Build Muscle": 
+        target_cal = tdee + 300
+        p_ratio, f_ratio, c_ratio = 0.25, 0.25, 0.50
+    else: 
+        target_cal = tdee
+        p_ratio, f_ratio, c_ratio = 0.20, 0.30, 0.50
+
+    # Calculate Grams (Protein/Carbs = 4 kcal/g, Fat = 9 kcal/g)
+    prot_g = (target_cal * p_ratio) / 4
+    fat_g = (target_cal * f_ratio) / 9
+    carb_g = (target_cal * c_ratio) / 4
     
-    # Activity Multipliers (Harris-Benedict)
-    multipliers = {
-        "Sedentary (Little/No Exercise)": 1.2,
-        "Lightly Active (1-3 days/week)": 1.375,
-        "Moderately Active (3-5 days/week)": 1.55,
-        "Very Active (6-7 days/week)": 1.725
-    }
-    tdee = bmr * multipliers[activity]
+    return round(target_cal), round(prot_g), round(fat_g), round(carb_g)
+
+# --- Inside your Dashboard Logic ---
+with col_input:
+    st.subheader("🎯 Health Goal")
+    goal = st.selectbox("What is your primary goal?", ["Maintain Weight", "Lose Weight", "Build Muscle"])
+
+with col_res:
+    target_cal, p_g, f_g, c_g = calculate_macros(tdee, goal, w)
     
-    # Protein Target (Generic clinical range: 1.6g/kg for active adults)
-    prot_target = w * 1.6
-    return round(bmr, 2), round(tdee, 2), round(prot_target, 2)
+    st.write(f"### 🎯 Daily Target for {goal}")
+    st.success(f"**{target_cal} Calories / Day**")
+    
+    # Visualizing Macros as a Table
+    macro_df = pd.DataFrame({
+        "Nutrient": ["Protein (g)", "Fats (g)", "Carbs (g)"],
+        "Target": [p_g, f_g, c_g],
+        "Current": [prot_in, "-", "-"] # You can track others if you add inputs
+    })
+    st.table(macro_df)
+
+    st.write("### 🍱 Sample Meal Structure")
+    st.caption(f"To hit your protein goal of {p_g}g, try to eat:")
+    st.info(f"Standard: 3 meals of **{round(p_g/3)}g** protein each + 1 snack.")
 
 def get_suggestions(bmi_status, prot_diff, diseases):
     tips = []
@@ -160,3 +184,4 @@ else:
     elif page == "Logout":
         st.session_state['logged_in'] = False
         st.rerun()
+
