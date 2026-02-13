@@ -7,13 +7,19 @@ import datetime
 st.set_page_config(page_title="ProHealth Suite v6.0", page_icon="🏥", layout="wide")
 
 # --- Custom Styling ---
-st.markdown("""
-    <style>
-    .stButton>button { width: 100%; border-radius: 8px; height: 3em; background-color: #1b5e20; color: white; font-weight: bold; }
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
-    </style>
-    """, unsafe_allow_html=True)
+.stMetric { 
+    background-color: #ffffff; 
+    padding: 15px; 
+    border-radius: 10px; 
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+}
+/* This forces the text inside the white boxes to be dark gray */
+[data-testid="stMetricValue"] {
+    color: #31333F !important;
+}
+[data-testid="stMetricLabel"] {
+    color: #555555 !important;
+}
 
 # --- Initialize Session States ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
@@ -156,3 +162,4 @@ else:
     elif page == "Logout":
         st.session_state['logged_in'] = False
         st.rerun()
+
