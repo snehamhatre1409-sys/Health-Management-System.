@@ -1,3 +1,5 @@
 streamlit
-fpdf
 pandas
+streamlit==1.38.0
+plotly
+fpdf2
