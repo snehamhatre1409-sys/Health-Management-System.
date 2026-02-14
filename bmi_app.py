@@ -1,9 +1,9 @@
-import streamlit as st
+import streamlit as st  # ✅ KEEP THIS
 import pandas as pd
 from fpdf import FPDF
 import datetime
 import sqlite3
-import plotly.express as px
+import plotly.express as px 
 import plotly.graph_objects as go
 from datetime import timedelta
 
@@ -333,3 +333,4 @@ else:
         st.session_state['health_data'] = pd.DataFrame()
         st.success("👋 Logged out successfully!")
         st.rerun()
+
