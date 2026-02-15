@@ -42,7 +42,7 @@ def add_user(u, p, e):
     c = conn.cursor()
     try:
         c.execute('INSERT INTO users (username, password, email, created_date) VALUES (?, ?, ?, ?)',
-                 (u, p, e, datetime.datetime.now().isoformat()))
+                  (u, p, e, datetime.datetime.now().isoformat()))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -178,7 +178,7 @@ else:
     
     st.sidebar.header("🏃 Activity & Lifestyle")
     activity = st.sidebar.selectbox("Activity Level", 
-                                   ["Sedentary", "Lightly Active", "Moderately Active", "Very Active"])
+                                    ["Sedentary", "Lightly Active", "Moderately Active", "Very Active"])
     sleep_hours = st.sidebar.slider("😴 Sleep (hours)", 0.0, 12.0, 7.0)
     daily_steps = st.sidebar.number_input("🚶 Steps Today", 0, 30000, 8000)
     water_intake = st.sidebar.number_input("💧 Water (liters)", 0.0, 10.0, 2.5)
@@ -194,15 +194,15 @@ else:
     hygiene_score = (teeth_brushed*25 + shower_today*25 + min(hands_washed/2, 25) + room_clean*25)
     
     conditions = st.sidebar.multiselect("🏥 Medical Conditions", 
-                                       ["None", "Diabetes", "Hypertension", "Thyroid", "Asthma"])
+                                        ["None", "Diabetes", "Hypertension", "Thyroid", "Asthma"])
     
     # Calculate metrics
     metrics = calculate_advanced_metrics(weight, height, age, gender, activity, sleep_hours, daily_steps)
     
     # Navigation
     page = st.sidebar.selectbox("📱 Navigate", 
-                               ["📊 Health Dashboard", "🎯 Targets & Goals", "🩺 Health Insights", 
-                                "📈 Progress Tracker", "🦠 Hygiene Monitor", "📋 Records & Reports", "🚪 Logout"])
+                                ["📊 Health Dashboard", "🎯 Targets & Goals", "🩺 Health Insights", 
+                                 "📈 Progress Tracker", "🦠 Hygiene Monitor", "📋 Records & Reports", "🤖 ProHealth AI", "🚪 Logout"])
     
     st.markdown(f'<h1 class="main-header">{page}</h1>', unsafe_allow_html=True)
     
@@ -245,7 +245,46 @@ else:
         col3.metric("💧 Hydration", f"{weight*0.04:.1f}L", f"{water_intake}L")
         
         st.info(f"💡 **Weekly Goal Progress**: Weight difference to target: {abs(weight-target_weight):.1f}kg")
-    
+        
+        # --- ADDED: DIET SUGGESTIONS SECTION ---
+        st.markdown("---")
+        st.subheader("🥗 Personalized Diet Suggestions")
+        
+        diet_type = st.radio("Select Diet Goal:", ["Weight Loss", "Maintain", "Muscle Gain"], horizontal=True)
+        
+        # Calculation for calorie targets based on selection
+        target_cal = metrics['tdee'] - 500 if diet_type == "Weight Loss" else metrics['tdee'] + 300 if diet_type == "Muscle Gain" else metrics['tdee']
+        
+        st.write(f"Based on your **{diet_type}** goal, your target is approximately **{target_cal:.0f} kcal/day**.")
+        
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            st.markdown("""
+            **🍳 Breakfast Ideas:**
+            * Oatmeal with nuts and berries (Low Cal)
+            * 3 Egg omelet with spinach and feta (High Protein)
+            * Greek yogurt with honey and flaxseeds
+            """)
+            st.markdown("""
+            **🍱 Lunch Ideas:**
+            * Grilled chicken breast with quinoa and broccoli
+            * Chickpea and avocado salad (Vegetarian)
+            * Tuna wrap with whole wheat tortilla
+            """)
+        with d_col2:
+            st.markdown("""
+            **🍽️ Dinner Ideas:**
+            * Baked Salmon with asparagus and sweet potato
+            * Stir-fry tofu with mixed vegetables and brown rice
+            * Lean beef strips with peppers and cauliflower rice
+            """)
+            st.markdown("""
+            **🍎 Snacks:**
+            * Handful of almonds or walnuts
+            * Apple slices with peanut butter
+            * Protein shake or cottage cheese
+            """)
+
     elif page == "🩺 Health Insights":
         if metrics['bmi'] < 18.5:
             st.error("⚠️ **Underweight**: Consider increasing calorie intake with healthy fats & proteins")
@@ -335,7 +374,40 @@ else:
                 )
         else:
             st.warning("📭 No health records yet. Save assessments from Dashboard!")
-    
+            
+    # --- ADDED: PROHEALTH AI ASSISTANT PAGE ---
+    elif page == "🤖 ProHealth AI":
+        st.subheader("How can I help you today?")
+        
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if prompt := st.chat_input("Ask about calories, hygiene, or health tips..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant"):
+                response = ""
+                p = prompt.lower()
+                if "calorie" in p:
+                    response = f"Your current TDEE is {metrics['tdee']} kcal. To lose weight safely, aim for {metrics['tdee']-500} kcal."
+                elif "hygiene" in p:
+                    response = "Top hygiene tip: Washing hands for 20 seconds can reduce respiratory infections by 20%!"
+                elif "protein" in p:
+                    response = f"Based on your weight, you should aim for {weight*1.6:.1f}g of protein per day for muscle maintenance."
+                elif "water" in p:
+                    response = "General rule: Drink half your body weight (in lbs) in ounces, or about 0.04L per kg of weight."
+                else:
+                    response = "I'm your ProHealth Assistant! You can ask me about your calorie targets, protein needs, or hygiene tips."
+                
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+
     elif page == "🚪 Logout":
         st.session_state['logged_in'] = False
         st.session_state['current_user'] = None
