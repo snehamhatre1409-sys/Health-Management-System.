@@ -7,115 +7,53 @@ import plotly.express as px
 from datetime import timedelta
 
 # --- Page Configuration ---
-st.set_page_config(
-    page_title="ProHealth Suite v8.0 - Professional", 
-    page_icon="🏥", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="ProHealth Suite v7.0 - Professional", page_icon="🏥", layout="wide")
 
-# --- Professional Custom CSS ---
+# --- Custom Light Theme CSS ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    .main { padding-top: 2rem; }
-    
-    .metric-container {
-        background: rgba(255,255,255,0.95) !important;
-        backdrop-filter: blur(10px);
-        border-radius: 20px !important;
-        border: 1px solid rgba(255,255,255,0.2) !important;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1) !important;
-        padding: 2rem !important;
-        margin: 1rem 0 !important;
-    }
-    
-    [data-testid="stMetricValue"] {
-        color: #1e293b !important;
-        font-weight: 700 !important;
-        font-size: 2.5rem !important;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        color: #64748b !important;
-        font-weight: 500 !important;
-    }
-    
-    .main-header {
-        font-family: 'Inter', sans-serif;
-        font-weight: 800;
-        font-size: 3.5rem;
-        background: linear-gradient(45deg, #1e40af, #3b82f6, #06b6d4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    
-    .glass-card {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(20px);
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        padding: 2.5rem;
-        box-shadow: 0 25px 50px rgba(0,0,0,0.15);
-        margin: 1rem 0;
-    }
-    
-    .sidebar .stButton > button {
-        background: linear-gradient(45deg, #3b82f6, #1d4ed8);
-        border-radius: 12px;
-        border: none;
-        height: 3rem;
-        font-weight: 600;
-        color: white;
-        width: 100%;
-        margin: 0.5rem 0;
-    }
-    
-    .login-card {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        padding: 3rem;
-        box-shadow: 0 25px 50px rgba(0,0,0,0.15);
-        max-width: 450px;
-        margin: 2rem auto;
-    }
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #F9F9F9;
+}
+h1 {
+    font-weight: 700;
+}
+.stButton>button {
+    background-color: #1976D2;
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+.stProgress > div > div > div > div {
+    background: #1976D2;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Database Setup (COMPLETE - This fixes the error!) ---
+# --- Enhanced Database Setup ---
 def init_db():
     conn = sqlite3.connect('prohealth.db')
     c = conn.cursor()
-    
     # Users table
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
+    c.execute('''CREATE TABLE IF NOT EXISTS users
                  (username TEXT PRIMARY KEY, password TEXT, email TEXT, created_date TEXT)''')
-    c.execute('INSERT OR IGNORE INTO users VALUES ("admin", "password123", "admin@prohealth.com", ?)', 
+    c.execute('INSERT OR IGNORE INTO users VALUES ("admin", "password123", "admin@prohealth.com", ?)',
               (datetime.datetime.now().isoformat(),))
-    
-    # Health records table
-    c.execute('''CREATE TABLE IF NOT EXISTS health_records 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  username TEXT, date TEXT, weight REAL, height REAL, age INTEGER, 
-                  gender TEXT, activity TEXT, protein_intake REAL, 
+    # Health records
+    c.execute('''CREATE TABLE IF NOT EXISTS health_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT, date TEXT, weight REAL, height REAL, age INTEGER,
+                  gender TEXT, activity TEXT, protein_intake REAL,
                   sleep_hours REAL, water_intake REAL, steps INTEGER,
-                  hygiene_score INTEGER, conditions TEXT,
-                  FOREIGN KEY(username) REFERENCES users(username))''')
-    
-    # Hygiene tracking table
-    c.execute('''CREATE TABLE IF NOT EXISTS hygiene_log 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, date TEXT,
-                  teeth_brushed BOOLEAN, hands_washed INTEGER, shower BOOLEAN,
-                  nails_trimmed BOOLEAN, room_clean BOOLEAN)''')
-    
+                  hygiene_score INTEGER, conditions TEXT)''')
     conn.commit()
     conn.close()
 
+init_db()
+
+# --- Helpers ---
 def add_user(u, p, e):
     conn = sqlite3.connect('prohealth.db')
     c = conn.cursor()
@@ -140,7 +78,7 @@ def check_user(u, p):
 def save_health_record(username, data):
     conn = sqlite3.connect('prohealth.db')
     c = conn.cursor()
-    c.execute('''INSERT INTO health_records 
+    c.execute('''INSERT INTO health_records
                  (username, date, weight, height, age, gender, activity, protein_intake,
                   sleep_hours, water_intake, steps, hygiene_score, conditions)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -156,167 +94,138 @@ def get_user_records(username):
     conn.close()
     return df
 
-# Initialize database
-init_db()
-
-# --- Initialize Session States ---
-if 'logged_in' not in st.session_state: 
-    st.session_state['logged_in'] = False
-if 'current_user' not in st.session_state: 
-    st.session_state['current_user'] = None
-if 'health_data' not in st.session_state: 
-    st.session_state['health_data'] = pd.DataFrame()
-
-# --- Metrics Calculation ---
 def calculate_advanced_metrics(w, h, a, g, activity, sleep, steps):
     bmi = w / (h**2)
-    if g == "Male": 
+    if g == "Male":
         bmr = 88.362 + (13.397 * w) + (4.799 * h * 100) - (5.677 * a)
-    else: 
+    else:
         bmr = 447.593 + (9.247 * w) + (3.098 * h * 100) - (4.330 * a)
-    
-    multipliers = {"Sedentary": 1.2, "Lightly Active": 1.375, "Moderately Active": 1.55, "Very Active": 1.725}
+    multipliers = {"Sedentary":1.2, "Lightly Active":1.375, "Moderately Active":1.55, "Very Active":1.725}
     tdee = bmr * multipliers[activity]
-    
     ideal_weight = 22.5 * (h**2)
-    body_fat_male = 1.20 * bmi + 0.23 * a - 16.2 if g == "Male" else 1.20 * bmi + 0.23 * a - 5.4
-    recovery_score = (sleep * 0.4 + steps/10000 * 0.3 + (w/ideal_weight)*0.3)
-    
+    body_fat = 1.20*bmi + 0.23*a - (16.2 if g=="Male" else 5.4)
+    recovery_score = (sleep*0.4 + steps/10000*0.3 + (w/ideal_weight)*0.3)
     return {
-        'bmi': round(bmi, 1), 'bmr': round(bmr, 0), 'tdee': round(tdee, 0),
-        'ideal_weight': round(ideal_weight, 1), 'body_fat': round(body_fat_male, 1),
-        'recovery_score': min(100, round(recovery_score * 100, 0))
+        'bmi': round(bmi, 1),
+        'bmr': round(bmr, 0),
+        'tdee': round(tdee, 0),
+        'ideal_weight': round(ideal_weight, 1),
+        'body_fat': round(body_fat, 1),
+        'recovery_score': min(100, round(recovery_score*100, 0))
     }
 
-# --- Professional Header ---
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.markdown('<h1 class="main-header">🏥 ProHealth Suite v8.0</h1>', unsafe_allow_html=True)
+# --- Session Init ---
+if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+if 'current_user' not in st.session_state: st.session_state['current_user'] = None
+if 'health_data' not in st.session_state: st.session_state['health_data'] = pd.DataFrame()
+
+# --- Header ---
+st.markdown(f"""
+<div style="display: flex; align-items: center; gap: 15px">
+    <img src="YOUR_LOGO_URL_HERE" width="58" />
+    <h1 style="margin:0; color: #1976D2;">ProHealth Suite v7.0</h1>
+</div>
+""", unsafe_allow_html=True)
 
 # --- Authentication ---
 if not st.session_state['logged_in']:
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
-    
-    tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
-    
+    st.markdown("## 🔐 Login or Register")
+    tab1, tab2 = st.tabs(["Login", "Register"])
+
     with tab1:
-        st.markdown("### Welcome Back")
-        username = st.text_input("👤 Username", placeholder="Enter your username")
-        password = st.text_input("🔒 Password", type="password", placeholder="Enter your password")
-        
-        if st.button("🚀 Sign In", use_container_width=True):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
             if check_user(username, password):
                 st.session_state['logged_in'] = True
                 st.session_state['current_user'] = username
                 st.session_state['health_data'] = get_user_records(username)
-                st.success("✅ Login successful!")
-                st.rerun()
+                st.experimental_rerun()
             else:
-                st.error("❌ Invalid credentials!")
-    
+                st.error("Invalid credentials!")
+
     with tab2:
-        st.info("👆 Default: **admin** / **password123**")
         new_username = st.text_input("New Username")
         new_password = st.text_input("New Password", type="password")
         new_email = st.text_input("Email (optional)")
-        
-        if st.button("Create Account", use_container_width=True):
-            if new_username and new_password:
-                if add_user(new_username, new_password, new_email or ""):
-                    st.success("✅ Account created!")
-                else:
-                    st.error("❌ Username already exists!")
+        if st.button("Create Account"):
+            if add_user(new_username, new_password, new_email or ""):
+                st.success("Account created! Please login.")
             else:
-                st.warning("⚠️ Fill username & password")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+                st.error("Username already exists!")
 
-# --- Main Dashboard ---
 else:
-    # Professional Sidebar
-    with st.sidebar:
-        st.markdown(f"""
-        <div style='text-align: center; padding: 1rem; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 16px; color: white;'>
-            <h3>👋 {st.session_state['current_user']}</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.header("📊 Profile")
-        weight = st.number_input("⚖️ Weight (kg)", 30.0, 200.0, 70.0)
-        height = st.number_input("📏 Height (m)", 1.0, 2.2, 1.70)
-        age = st.number_input("🎂 Age", 12, 100, 25)
-        gender = st.radio("⚥ Gender", ["Male", "Female"])
-        
-        st.header("🏃 Activity")
-        activity = st.selectbox("Activity Level", 
-                              ["Sedentary", "Lightly Active", "Moderately Active", "Very Active"])
-        sleep_hours = st.slider("😴 Sleep (hours)", 0.0, 12.0, 7.0)
-        daily_steps = st.number_input("🚶 Steps", 0, 30000, 8000)
-        
-        if st.button("💾 Save Data"):
-            hygiene_score = 85  # Simplified for demo
-            record_data = {
+    st.sidebar.header(f"👋 Hello, {st.session_state['current_user']}")
+    st.sidebar.markdown("---")
+
+    # Sidebar Inputs
+    with st.sidebar.expander("📊 Personal Profile"):
+        weight = st.number_input("Weight (kg)", 30.0, 200.0, 70.0)
+        height = st.number_input("Height (m)", 1.0, 2.2, 1.70)
+        age = st.number_input("Age", 12, 100, 25)
+        gender = st.radio("Gender", ["Male","Female"])
+
+    with st.sidebar.expander("🏃 Activity & Lifestyle"):
+        activity = st.selectbox("Activity Level",
+                                ["Sedentary","Lightly Active","Moderately Active","Very Active"])
+        sleep_hours = st.slider("Sleep (hrs)", 0.0, 12.0, 7.0)
+        daily_steps = st.number_input("Steps Today", 0, 30000, 8000)
+        water_intake = st.number_input("Water (L)", 0.0, 10.0, 2.5)
+        protein_intake = st.number_input("Protein (g)", 0, 300, 100)
+
+    with st.sidebar.expander("🦠 Hygiene"):
+        teeth_brushed = st.checkbox("Teeth Brushed")
+        shower_today = st.checkbox("Shower")
+        hands_washed = st.number_input("Hand Washes", 0, 50, 10)
+        room_clean = st.checkbox("Room Clean")
+        hygiene_score = (teeth_brushed*25 + shower_today*25 + min(hands_washed/2,25) + room_clean*25)
+
+    metrics = calculate_advanced_metrics(weight, height, age, gender,
+                                         activity, sleep_hours, daily_steps)
+
+    page = st.sidebar.radio("Navigate", [
+        "Dashboard","Goals","Progress","Insights","Hygiene","Records","AI Assistant","Logout"
+    ])
+
+    st.markdown(f"## {page}")
+
+    # --- Pages ---
+    if page == "Dashboard":
+        # KPI Cards
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("BMI", metrics['bmi'])
+        col2.metric("BMR (kcal)", metrics['bmr'], f"{metrics['tdee']} TDEE")
+        col3.metric("Recovery", f"{metrics['recovery_score']}%")
+        col4.metric("Hygiene Score", f"{hygiene_score}%")
+
+        if st.button("Save Assessment"):
+            record = {
                 'date': datetime.date.today().strftime("%Y-%m-%d"),
                 'weight': weight, 'height': height, 'age': age, 'gender': gender,
-                'activity': activity, 'protein_intake': 100, 'sleep_hours': sleep_hours,
-                'water_intake': 2.5, 'steps': daily_steps, 'hygiene_score': hygiene_score,
-                'conditions': 'None'
+                'activity': activity, 'protein_intake': protein_intake,
+                'sleep_hours': sleep_hours, 'water_intake': water_intake,
+                'steps': daily_steps, 'hygiene_score': hygiene_score,
+                'conditions': ""
             }
-            save_health_record(st.session_state['current_user'], record_data)
+            save_health_record(st.session_state['current_user'], record)
+            st.success("Saved!")
             st.session_state['health_data'] = get_user_records(st.session_state['current_user'])
-            st.success("✅ Saved!")
-            st.balloons()
-    
-    # Main Content
-    metrics = calculate_advanced_metrics(weight, height, age, gender, activity, sleep_hours, daily_steps)
-    hygiene_score = 85  # Demo value
-    
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("### 📊 Health Overview")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📏 BMI", f"{metrics['bmi']}", "✅ Normal")
-    col2.metric("🔥 Calories", f"{metrics['tdee']}", f"{metrics['bmr']}")
-    col3.metric("❤️ Recovery", f"{metrics['recovery_score']}%", "+12%")
-    col4.metric("🦠 Hygiene", f"{hygiene_score}%", "+5%")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Professional Tabs
-    tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "🎯 Goals", "📈 Progress"])
-    
-    with tab1:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.metric("🥗 Protein", "112g", "Achieved ✓")
-            st.metric("💧 Water", "2.8L", "Good")
-            st.markdown('</div>', unsafe_allow_html=True)
-        with col2:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.progress(0.85)
-            st.caption("Recovery Score")
-            st.progress(0.92)
-            st.caption("Hygiene Score")
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader("🎯 Your Goals")
-        st.info(f"💡 Target calories: {metrics['tdee'] - 500} kcal/day for weight loss")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+
+    elif page == "Progress":
+        df = st.session_state['health_data']
+        if not df.empty:
+            df['date'] = pd.to_datetime(df['date'])
+            fig = px.line(df, x='date', y='weight', title="Weight Progress")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No records yet.")
+
+    elif page == "Records":
         if not st.session_state['health_data'].empty:
             st.dataframe(st.session_state['health_data'])
         else:
-            st.info("👆 Save your first record to see progress!")
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.info("No records yet.")
 
-# Professional Footer
-st.markdown("""
-<div style='text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.9rem;'>
-    🏥 ProHealth Suite v8.0 | Professional Health Management
-</div>
-""", unsafe_allow_html=True)
+    elif page == "Logout":
+        st.session_state.clear()
+        st.experimental_rerun()
