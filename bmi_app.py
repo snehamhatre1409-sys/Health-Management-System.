@@ -4,7 +4,6 @@ from fpdf import FPDF
 import datetime
 import sqlite3
 import plotly.express as px
-from datetime import timedelta
 
 # --- Page Configuration ---
 st.set_page_config(page_title="ProHealth Suite v7.0 - Professional", page_icon="🏥", layout="wide")
@@ -32,16 +31,14 @@ h1 {
 </style>
 """, unsafe_allow_html=True)
 
-# --- Enhanced Database Setup ---
+# --- Database Setup ---
 def init_db():
     conn = sqlite3.connect('prohealth.db')
     c = conn.cursor()
-    # Users table
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (username TEXT PRIMARY KEY, password TEXT, email TEXT, created_date TEXT)''')
     c.execute('INSERT OR IGNORE INTO users VALUES ("admin", "password123", "admin@prohealth.com", ?)',
               (datetime.datetime.now().isoformat(),))
-    # Health records
     c.execute('''CREATE TABLE IF NOT EXISTS health_records
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT, date TEXT, weight REAL, height REAL, age INTEGER,
@@ -53,7 +50,7 @@ def init_db():
 
 init_db()
 
-# --- Helpers ---
+# --- Helper Functions ---
 def add_user(u, p, e):
     conn = sqlite3.connect('prohealth.db')
     c = conn.cursor()
@@ -114,12 +111,15 @@ def calculate_advanced_metrics(w, h, a, g, activity, sleep, steps):
         'recovery_score': min(100, round(recovery_score*100, 0))
     }
 
-# --- Session Init ---
-if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
-if 'current_user' not in st.session_state: st.session_state['current_user'] = None
-if 'health_data' not in st.session_state: st.session_state['health_data'] = pd.DataFrame()
+# --- Session Initialization ---
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+if 'current_user' not in st.session_state:
+    st.session_state['current_user'] = None
+if 'health_data' not in st.session_state:
+    st.session_state['health_data'] = pd.DataFrame()
 
-# --- Header ---
+# --- App Header ---
 st.markdown(f"""
 <div style="display: flex; align-items: center; gap: 15px">
     <img src="YOUR_LOGO_URL_HERE" width="58" />
@@ -127,10 +127,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# --- Authentication ---
+# --- Authentication Screen ---
 if not st.session_state['logged_in']:
-    st.markdown("## 🔐 Login or Register")
-    tab1, tab2 = st.tabs(["Login", "Register"])
+    tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
 
     with tab1:
         username = st.text_input("Username")
@@ -140,25 +139,29 @@ if not st.session_state['logged_in']:
                 st.session_state['logged_in'] = True
                 st.session_state['current_user'] = username
                 st.session_state['health_data'] = get_user_records(username)
-                st.experimental_rerun()
+                st.success("✅ Logged in!")
+                st.rerun()
             else:
-                st.error("Invalid credentials!")
+                st.error("❌ Invalid credentials!")
 
     with tab2:
         new_username = st.text_input("New Username")
         new_password = st.text_input("New Password", type="password")
         new_email = st.text_input("Email (optional)")
         if st.button("Create Account"):
-            if add_user(new_username, new_password, new_email or ""):
-                st.success("Account created! Please login.")
+            if new_username and new_password:
+                if add_user(new_username, new_password, new_email or ""):
+                    st.success("Account created! Please login.")
+                else:
+                    st.error("❌ Username already exists!")
             else:
-                st.error("Username already exists!")
+                st.warning("⚠️ Fill username & password.")
 
 else:
+    # --- Sidebar with Expanders ---
     st.sidebar.header(f"👋 Hello, {st.session_state['current_user']}")
     st.sidebar.markdown("---")
 
-    # Sidebar Inputs
     with st.sidebar.expander("📊 Personal Profile"):
         weight = st.number_input("Weight (kg)", 30.0, 200.0, 70.0)
         height = st.number_input("Height (m)", 1.0, 2.2, 1.70)
@@ -178,44 +181,42 @@ else:
         shower_today = st.checkbox("Shower")
         hands_washed = st.number_input("Hand Washes", 0, 50, 10)
         room_clean = st.checkbox("Room Clean")
-        hygiene_score = (teeth_brushed*25 + shower_today*25 + min(hands_washed/2,25) + room_clean*25)
+        hygiene_score = (teeth_brushed*25 + shower_today*25 + min(hands_washed/2, 25) + room_clean*25)
 
     metrics = calculate_advanced_metrics(weight, height, age, gender,
                                          activity, sleep_hours, daily_steps)
 
-    page = st.sidebar.radio("Navigate", [
-        "Dashboard","Goals","Progress","Insights","Hygiene","Records","AI Assistant","Logout"
+    page = st.sidebar.radio("📱 Navigate", [
+        "Dashboard","Goals","Progress","Insights","Hygiene","Records","Logout"
     ])
 
     st.markdown(f"## {page}")
 
-    # --- Pages ---
+    # --- Page Logic ---
     if page == "Dashboard":
-        # KPI Cards
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("BMI", metrics['bmi'])
         col2.metric("BMR (kcal)", metrics['bmr'], f"{metrics['tdee']} TDEE")
-        col3.metric("Recovery", f"{metrics['recovery_score']}%")
+        col3.metric("Recovery %", f"{metrics['recovery_score']}%")
         col4.metric("Hygiene Score", f"{hygiene_score}%")
 
-        if st.button("Save Assessment"):
+        if st.button("💾 Save Assessment"):
             record = {
                 'date': datetime.date.today().strftime("%Y-%m-%d"),
                 'weight': weight, 'height': height, 'age': age, 'gender': gender,
                 'activity': activity, 'protein_intake': protein_intake,
                 'sleep_hours': sleep_hours, 'water_intake': water_intake,
-                'steps': daily_steps, 'hygiene_score': hygiene_score,
-                'conditions': ""
+                'steps': daily_steps, 'hygiene_score': hygiene_score, 'conditions': ""
             }
             save_health_record(st.session_state['current_user'], record)
-            st.success("Saved!")
+            st.success("Saved successfully!")
             st.session_state['health_data'] = get_user_records(st.session_state['current_user'])
 
     elif page == "Progress":
         df = st.session_state['health_data']
         if not df.empty:
             df['date'] = pd.to_datetime(df['date'])
-            fig = px.line(df, x='date', y='weight', title="Weight Progress")
+            fig = px.line(df, x='date', y='weight', title="📈 Weight Progress")
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No records yet.")
@@ -228,4 +229,4 @@ else:
 
     elif page == "Logout":
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
