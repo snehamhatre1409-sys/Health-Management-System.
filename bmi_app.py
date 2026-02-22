@@ -178,4 +178,5 @@ def calculate_advanced_metrics(w, h, a, g, activity, sleep, steps):
     
     return {
         'bmi': round(bmi, 1), 'bmr': round(bmr, 0), 'tdee': round(tdee, 0),
-        'ideal_weight': round(ideal_weight
+        'ideal_weight': round(ideal_weight)
+
