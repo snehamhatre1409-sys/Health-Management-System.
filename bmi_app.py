@@ -34,6 +34,14 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, date TEXT,
                   teeth_brushed BOOLEAN, hands_washed INTEGER, shower BOOLEAN,
                   nails_trimmed BOOLEAN, room_clean BOOLEAN)''')
+    
+    # NEW: Family members table for multi-person management
+    c.execute('''CREATE TABLE IF NOT EXISTS family_members 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  manager_username TEXT, member_name TEXT, relationship TEXT,
+                  age INTEGER, gender TEXT, target_weight REAL,
+                  FOREIGN KEY(manager_username) REFERENCES users(username))''')
+    
     conn.commit()
     conn.close()
 
@@ -77,6 +85,36 @@ def get_user_records(username):
     conn.close()
     return df
 
+# NEW: Multi-person management functions
+def get_family_members(manager_username):
+    conn = sqlite3.connect('prohealth.db')
+    df = pd.read_sql_query("SELECT * FROM family_members WHERE manager_username=?", 
+                          conn, params=(manager_username,))
+    conn.close()
+    return df
+
+def add_family_member(manager_username, member_name, relationship, age, gender, target_weight):
+    conn = sqlite3.connect('prohealth.db')
+    c = conn.cursor()
+    try:
+        c.execute('''INSERT INTO family_members 
+                    (manager_username, member_name, relationship, age, gender, target_weight)
+                    VALUES (?, ?, ?, ?, ?, ?)''',
+                 (manager_username, member_name, relationship, age, gender, target_weight))
+        conn.commit()
+        return True
+    except:
+        return False
+    finally:
+        conn.close()
+
+def delete_family_member(member_id):
+    conn = sqlite3.connect('prohealth.db')
+    c = conn.cursor()
+    c.execute('DELETE FROM family_members WHERE id=?', (member_id,))
+    conn.commit()
+    conn.close()
+
 init_db()
 
 # --- Enhanced Custom Styling ---
@@ -98,6 +136,7 @@ st.markdown("""
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 if 'current_user' not in st.session_state: st.session_state['current_user'] = None
 if 'health_data' not in st.session_state: st.session_state['health_data'] = pd.DataFrame()
+if 'current_family_member' not in st.session_state: st.session_state['current_family_member'] = None  # NEW
 
 # --- Enhanced Metrics Calculation ---
 def calculate_advanced_metrics(w, h, a, g, activity, sleep, steps):
@@ -143,6 +182,7 @@ if not st.session_state['logged_in']:
                     st.session_state['logged_in'] = True
                     st.session_state['current_user'] = username
                     st.session_state['health_data'] = get_user_records(username)
+                    st.session_state['current_family_member'] = None  # NEW
                     st.success("✅ Login successful!")
                     st.rerun()
                 else:
@@ -168,6 +208,27 @@ else:
     st.sidebar.markdown("---")
     st.sidebar.markdown(f"👋 **Welcome, {st.session_state['current_user']}**")
     st.sidebar.markdown("---")
+    
+    # NEW: Family Member Selector in Sidebar
+    family_members = get_family_members(st.session_state['current_user'])
+    if not family_members.empty:
+        st.sidebar.markdown("👥 **Family Members**")
+        selected_member = st.sidebar.selectbox(
+            "Select Profile:",
+            options=['👤 My Profile'] + [f"👨‍👩‍👧‍👦 {row['member_name']} ({row['relationship']})" 
+                     for _, row in family_members.iterrows()],
+            index=0
+        )
+        if "👤 My Profile" not in selected_member:
+            member_name = selected_member.split(" ")[1].split("(")[0]
+            st.session_state['current_family_member'] = member_name
+        else:
+            st.session_state['current_family_member'] = None
+    else:
+        st.session_state['current_family_member'] = None
+    
+    # Determine current profile for data storage
+    current_profile = st.session_state['current_family_member'] or st.session_state['current_user']
     
     # Enhanced Sidebar Inputs
     st.sidebar.header("📊 Personal Profile")
@@ -199,14 +260,22 @@ else:
     # Calculate metrics
     metrics = calculate_advanced_metrics(weight, height, age, gender, activity, sleep_hours, daily_steps)
     
-    # Navigation
+    # Updated Navigation with NEW Multi-Person page
     page = st.sidebar.selectbox("📱 Navigate", 
                                 ["📊 Health Dashboard", "🎯 Targets & Goals", "🩺 Health Insights", 
-                                 "📈 Progress Tracker", "🦠 Hygiene Monitor", "📋 Records & Reports", "🤖 ProHealth AI", "🚪 Logout"])
+                                 "📈 Progress Tracker", "🦠 Hygiene Monitor", "📋 Records & Reports", 
+                                 "👥 Multi-Person Management", "🤖 ProHealth AI", "🚪 Logout"])  # NEW page added
     
     st.markdown(f'<h1 class="main-header">{page}</h1>', unsafe_allow_html=True)
     
+    # Load data for current profile
+    st.session_state['health_data'] = get_user_records(current_profile)
+    
     if page == "📊 Health Dashboard":
+        # Profile indicator
+        profile_display = f"👤 **{current_profile}**" if st.session_state['current_family_member'] else "👤 **Your Profile**"
+        st.info(profile_display)
+        
         # KPI Cards
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("📏 BMI", f"{metrics['bmi']}", "Normal" if 18.5 <= metrics['bmi'] <= 24.9 else "⚠️ Check")
@@ -232,11 +301,11 @@ else:
                 'steps': daily_steps, 'hygiene_score': hygiene_score,
                 'conditions': ', '.join(conditions)
             }
-            save_health_record(st.session_state['current_user'], record_data)
-            st.session_state['health_data'] = get_user_records(st.session_state['current_user'])
-            st.success("✅ Data saved to your health profile!")
+            save_health_record(current_profile, record_data)  # Uses current profile
+            st.session_state['health_data'] = get_user_records(current_profile)
+            st.success(f"✅ Data saved for **{current_profile}**!")
             st.balloons()
-    
+
     elif page == "🎯 Targets & Goals":
         target_weight = st.number_input("🎯 Target Weight (kg)", 30.0, 150.0, metrics['ideal_weight'])
         col1, col2, col3 = st.columns(3)
@@ -256,7 +325,7 @@ else:
         target_cal = metrics['tdee'] - 500 if diet_type == "Weight Loss" else metrics['tdee'] + 300 if diet_type == "Muscle Gain" else metrics['tdee']
         
         st.write(f"Based on your **{diet_type}** goal, your target is approximately **{target_cal:.0f} kcal/day**.")
-        
+
         d_col1, d_col2 = st.columns(2)
         with d_col1:
             st.markdown("""
@@ -300,13 +369,13 @@ else:
             
         if hygiene_score < 70:
             st.error("🦠 **Hygiene Alert**: Improve daily hygiene routine")
-    
+
     elif page == "📈 Progress Tracker":
         if not st.session_state['health_data'].empty:
             df = st.session_state['health_data'].copy()
             df['date'] = pd.to_datetime(df['date'])
             
-            fig = px.line(df, x='date', y='weight', title="Weight Progress Over Time")
+            fig = px.line(df, x='date', y='weight', title=f"{current_profile}'s Weight Progress")
             st.plotly_chart(fig, use_container_width=True)
             
             col1, col2 = st.columns(2)
@@ -318,7 +387,7 @@ else:
                 st.metric("Avg Steps", f"{df['steps'].mean():.0f}")
         else:
             st.info("👆 Save your first assessment from the Dashboard to see progress!")
-    
+
     elif page == "🦠 Hygiene Monitor":
         st.info("🧼 **Daily Hygiene Score**: " + str(hygiene_score) + "%")
         
@@ -337,7 +406,7 @@ else:
         - 🧼 Wash hands 15+ times daily
         - 🧹 Keep living space clutter-free
         """)
-    
+
     elif page == "📋 Records & Reports":
         if not st.session_state['health_data'].empty:
             st.dataframe(st.session_state['health_data'], use_container_width=True)
@@ -350,7 +419,7 @@ else:
                 pdf.ln(10)
                 
                 pdf.set_font("Arial", '', 12)
-                pdf.cell(0, 10, f"User: {st.session_state['current_user']}", ln=True)
+                pdf.cell(0, 10, f"Profile: {current_profile}", ln=True)
                 pdf.cell(0, 10, f"Report Date: {datetime.date.today()}", ln=True)
                 pdf.ln(10)
                 
@@ -360,8 +429,6 @@ else:
                 pdf.cell(0, 10, f"Average Hygiene: {df['hygiene_score'].mean():.0f}%", ln=True)
                 pdf.cell(0, 10, f"Total Records: {len(df)}", ln=True)
                 
-                # --- FIXED LINE BELOW ---
-                # We remove .encode() because fpdf2 output is already bytes
                 pdf_output = pdf.output()
                 if isinstance(pdf_output, bytearray):
                     pdf_output = bytes(pdf_output) 
@@ -369,13 +436,60 @@ else:
                 st.download_button(
                     label="⬇️ Download Report",
                     data=pdf_output,
-                    file_name=f"prohealth_report_{st.session_state['current_user']}.pdf",
+                    file_name=f"prohealth_report_{current_profile}.pdf",
                     mime="application/pdf"
                 )
         else:
             st.warning("📭 No health records yet. Save assessments from Dashboard!")
-            
-    # --- ADDED: PROHEALTH AI ASSISTANT PAGE ---
+
+    # NEW: Multi-Person Management Page
+    elif page == "👥 Multi-Person Management":
+        st.markdown("### 👨‍👩‍👧‍👦 Family Health Management")
+        st.info(f"📝 Manage health records for your family members. All data is stored separately under **{st.session_state['current_user']}'s** account.")
+        
+        # Current family members table
+        family_df = get_family_members(st.session_state['current_user'])
+        if not family_df.empty:
+            st.subheader("📋 Your Family Members")
+            st.dataframe(family_df[['member_name', 'relationship', 'age', 'gender', 'target_weight']], use_container_width=True)
+        else:
+            st.info("👆 No family members added yet!")
+        
+        st.markdown("---")
+        st.subheader("➕ Add New Family Member")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            member_name = st.text_input("👤 Name")
+            relationship = st.selectbox("❤️ Relationship", ["Spouse", "Child", "Parent", "Sibling", "Other"])
+            age = st.number_input("🎂 Age", 1, 100, 30)
+            gender = st.radio("⚥ Gender", ["Male", "Female"], horizontal=True)
+        with col2:
+            target_weight = st.number_input("🎯 Target Weight (kg)", 20.0, 150.0, 65.0)
+        
+        if st.button("➕ Add Family Member", use_container_width=True):
+            if member_name:
+                if add_family_member(st.session_state['current_user'], member_name, relationship, 
+                                   age, gender, target_weight):
+                    st.success(f"✅ **{member_name}** added successfully!")
+                    st.rerun()
+                else:
+                    st.error("❌ Error adding member!")
+            else:
+                st.warning("⚠️ Please enter a name!")
+        
+        # Delete functionality
+        if not family_df.empty:
+            st.markdown("---")
+            st.subheader("🗑️ Remove Family Member")
+            selected_to_delete = st.selectbox("Select to delete:", 
+                                            family_df['member_name'].tolist())
+            if st.button("🗑️ Delete Selected Member", type="secondary"):
+                member_id = family_df[family_df['member_name'] == selected_to_delete]['id'].iloc[0]
+                delete_family_member(member_id)
+                st.success(f"✅ **{selected_to_delete}** removed!")
+                st.rerun()
+    
     elif page == "🤖 ProHealth AI":
         st.subheader("How can I help you today?")
         
@@ -402,8 +516,10 @@ else:
                     response = f"Based on your weight, you should aim for {weight*1.6:.1f}g of protein per day for muscle maintenance."
                 elif "water" in p:
                     response = "General rule: Drink half your body weight (in lbs) in ounces, or about 0.04L per kg of weight."
+                elif "family" in p:
+                    response = f"You can manage family health records via the **👥 Multi-Person Management** page. Switch profiles in the sidebar!"
                 else:
-                    response = "I'm your ProHealth Assistant! You can ask me about your calorie targets, protein needs, or hygiene tips."
+                    response = "I'm your ProHealth Assistant! You can ask me about your calorie targets, protein needs, hygiene tips, or family management."
                 
                 st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
@@ -412,5 +528,6 @@ else:
         st.session_state['logged_in'] = False
         st.session_state['current_user'] = None
         st.session_state['health_data'] = pd.DataFrame()
+        st.session_state['current_family_member'] = None  # NEW
         st.success("👋 Logged out successfully!")
         st.rerun()
